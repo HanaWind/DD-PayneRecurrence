@@ -1,0 +1,3 @@
+source_id,ra,dec,teff,logg,vmic,fe_h,c_fe,n_fe,o_fe,mg_fe,al_fe,si_fe,ca_fe,ti_fe,cr_fe,mn_fe,ni_fe,label_source
+example,0.0,0.0,5777.0,4.44,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,APOGEE_DR17
+

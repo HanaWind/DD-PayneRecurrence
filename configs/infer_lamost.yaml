@@ -1,0 +1,12 @@
+checkpoint: outputs/train_lamost/best.pt
+manifest: data/metadata/spectra.csv
+output_csv: outputs/inference/lamost_labels.csv
+device: cuda
+batch_size: 64
+max_objects: null
+optimizer:
+  steps: 300
+  learning_rate: 0.03
+  estimate_uncertainty: false
+preprocess_config: configs/preprocess_lamost.yaml
+

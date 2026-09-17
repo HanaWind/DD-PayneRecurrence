@@ -1,0 +1,53 @@
+spectra_root: spectra/dr9-v2.0-lrs-fits
+matched_labels: data/interim/lamost_highres_matched.csv
+output_h5: data/processed/lamost_training.h5
+rejections_csv: data/interim/preprocess_rejections.csv
+
+labels:
+  - teff
+  - logg
+  - vmic
+  - fe_h
+  - c_fe
+  - n_fe
+  - o_fe
+  - mg_fe
+  - al_fe
+  - si_fe
+  - ca_fe
+  - ti_fe
+  - cr_fe
+  - mn_fe
+  - ni_fe
+
+wavelength:
+  start_angstrom: 3800.0
+  end_angstrom: 8800.0
+  log10_step: 0.0001
+
+continuum:
+  mode: gaussian
+  gaussian_sigma_angstrom: 50.0
+  exclude_ranges_angstrom:
+    - [4081.0, 4121.0]
+    - [4310.0, 4370.0]
+    - [4831.0, 4891.0]
+    - [6531.0, 6591.0]
+    - [5780.0, 5790.0]
+    - [6270.0, 6320.0]
+    - [6610.0, 6630.0]
+
+quality:
+  require_class_star: true
+  minimum_snr_g: 20.0
+  reject_nonzero_andmask: true
+  reject_nonzero_ormask: false
+  minimum_valid_fraction: 0.80
+
+split:
+  train_fraction: 0.80
+  validation_fraction: 0.10
+  test_fraction: 0.10
+  seed: 42
+  group_column: source_id
+

@@ -1,0 +1,35 @@
+dataset: data/processed/lamost_training.h5
+run_dir: outputs/train_lamost
+device: cuda
+seed: 42
+
+model:
+  hidden_size: 40
+  activation_slope: 0.01
+  pixel_chunk_size: 512
+
+optimization:
+  batch_size: 128
+  max_steps: 10000
+  learning_rate_start: 0.01
+  learning_rate_end: 0.0001
+  weight_decay: 0.0
+  gradient_clip_norm: 10.0
+  mixed_precision: true
+  num_workers: 0
+  validation_every: 100
+  checkpoint_every: 500
+
+gradient_regularization:
+  # Full DD-Payne training must provide this file. See docs/DATA_SCHEMA_ZH.md.
+  path: data/external/kurucz_lamost_gradients.npz
+  required: true
+  apply_every_steps: 1
+  reference_batch_size: 8
+  weights:
+    teff: 5.0
+    logg: 5.0
+    vmic: 5.0
+    fe_h: 50.0
+    default: 50.0
+

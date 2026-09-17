@@ -1,0 +1,23 @@
+.venv/
+.idea/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Large/raw data and generated products
+spectra/
+data/external/*
+data/interim/*
+data/processed/*
+models/*
+outputs/*
+tmp/
+docs/
+
+!data/external/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+!models/.gitkeep
+!outputs/.gitkeep
+
