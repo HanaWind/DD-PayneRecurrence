@@ -4,6 +4,7 @@
 
 - LAMOST DR9 `fits.gz` 读取、质量掩码、静止系校正、伪连续谱归一化和公共波长网格重采样；
 - LAMOST 与 APOGEE/GALAH 等高分辨率标签表的天球坐标交叉匹配；
+- 从 LAMOST 官方目录先生成候选 `obsid`，优先 Gaia ID、再用坐标回退匹配；
 - 按恒星分组的 train/validation/test 划分，避免重复观测泄漏；
 - 论文式逐像素两隐层 Payne 网络；
 - 观测光谱重建损失与物理梯度谱正则项；
@@ -31,11 +32,24 @@ py -3.11 -m venv .venv
 
 # 构建完整元数据表
 .venv\Scripts\ddpayne build-manifest --spectra-root spectra/dr9-v2.0-lrs-fits --output data/metadata/spectra.csv
+
+# 目录级交叉匹配，输出候选 obsid 和训练标签（可直接读取 APOGEE FITS）
+.venv\Scripts\ddpayne build-candidates --lamost-catalog data/metadata/spectra.csv `
+  --labels data/external/allStar-dr17-synspec_rev1.fits `
+  --output data/interim/lamost_apogee_candidates.csv `
+  --quality apogee
 ```
+
+当前本地光谱应使用 `data/metadata/spectra.csv`。文档中的
+`data/external/lamost_full_lrs_catalog.fits` 或
+`data/external/lamost_dr9_lrs_general.fits` 是官方全量 LAMOST 目录的占位路径，只有在你下载并保存该目录后才能作为 `--lamost-catalog` 使用。
 
 若只使用 CPU，可跳过 CUDA 版 PyTorch 命令。其他显卡/驱动请以 PyTorch 官方安装选择器给出的命令为准。
 
 完整流程、开源状态、算力估算和数据要求见 [复现指南](docs/REPRODUCTION_GUIDE_ZH.md)。字段约定见 [数据规范](docs/DATA_SCHEMA_ZH.md)。
+从监督标签、质量控制、ATLAS12/SYNTHE 梯度库到 A100 正式训练的逐步执行清单见 [STEPS.md](STEPS.md)。
+其中第 1.4 节规定了从当前 DR9 LRS 子集扩展到 LRS/MRS、多个 release 和全量推断的数据湖方案。
+候选 `obsid` 的目录级命令和下载后预处理衔接也记录在 STEPS.md 第 1.4 节。
 
 ## 项目结构
 

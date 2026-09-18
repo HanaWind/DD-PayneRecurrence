@@ -15,6 +15,7 @@ from ddpayne.data.lamost import read_lamost_spectrum
 from ddpayne.data.preprocess import common_log_wavelength_grid, preprocess_lamost_spectrum
 
 SPLIT_NAMES = {0: "train", 1: "validation", 2: "test"}
+REJECTION_COLUMNS = ("obsid", "source_id", "path", "snrg", "class", "stage", "reason")
 
 
 def stable_split(group_id: str, split_config: dict[str, Any]) -> int:
@@ -52,11 +53,26 @@ def _passes_header_quality(row: pd.Series, quality: dict[str, Any]) -> tuple[boo
     return True, ""
 
 
+def _rejection_record(row: pd.Series, path: str, stage: str, reason: str) -> dict[str, Any]:
+    return {
+        "obsid": row.get("obsid", ""),
+        "source_id": row.get("source_id", ""),
+        "path": path,
+        "snrg": row.get("snrg", np.nan),
+        "class": row.get("class", ""),
+        "stage": stage,
+        "reason": reason,
+    }
+
+
 def prepare_hdf5(config_path: str | Path) -> dict[str, Any]:
     config = load_yaml(config_path)
     labels_path = project_path(config["matched_labels"])
     output_path = project_path(config["output_h5"])
     rejections_path = project_path(config["rejections_csv"])
+    summary_path = project_path(
+        config.get("summary_json", rejections_path.with_suffix(".summary.json"))
+    )
     label_names = [str(name) for name in config["labels"]]
     rows = pd.read_csv(labels_path, low_memory=False)
     missing = set(label_names + ["path", "source_id"]) - set(rows.columns)
@@ -72,11 +88,12 @@ def prepare_hdf5(config_path: str | Path) -> dict[str, Any]:
     quality = config.get("quality", {})
     output_path.parent.mkdir(parents=True, exist_ok=True)
     rejections_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = output_path.with_suffix(output_path.suffix + ".tmp")
     string_dtype = h5py.string_dtype(encoding="utf-8")
     count = len(rows)
     chunk_rows = max(1, min(32, count))
-    rejections: list[dict[str, str]] = []
+    rejections: list[dict[str, Any]] = []
     written = 0
 
     with h5py.File(temporary, "w") as output:
@@ -118,14 +135,32 @@ def prepare_hdf5(config_path: str | Path) -> dict[str, Any]:
             accepted, reason = _passes_header_quality(row, quality)
             path_text = str(row.get("path", ""))
             if not accepted:
-                rejections.append({"path": path_text, "reason": reason})
+                rejections.append(_rejection_record(row, path_text, "header_quality", reason))
                 continue
             label_values = row[label_names].to_numpy(dtype=np.float64)
             if not np.all(np.isfinite(label_values)):
-                rejections.append({"path": path_text, "reason": "one or more labels are missing"})
+                rejections.append(
+                    _rejection_record(
+                        row,
+                        path_text,
+                        "labels",
+                        "one or more labels are missing",
+                    )
+                )
                 continue
             try:
                 spectrum = read_lamost_spectrum(_resolve_spectrum_path(path_text))
+            except Exception as exc:
+                rejections.append(
+                    _rejection_record(
+                        row,
+                        path_text,
+                        "read_spectrum",
+                        f"{type(exc).__name__}: {exc}",
+                    )
+                )
+                continue
+            try:
                 processed = preprocess_lamost_spectrum(
                     spectrum=spectrum,
                     target_wavelength=wavelength,
@@ -133,7 +168,14 @@ def prepare_hdf5(config_path: str | Path) -> dict[str, Any]:
                     quality_config=quality,
                 )
             except Exception as exc:
-                rejections.append({"path": path_text, "reason": f"{type(exc).__name__}: {exc}"})
+                rejections.append(
+                    _rejection_record(
+                        row,
+                        path_text,
+                        "preprocess_spectrum",
+                        f"{type(exc).__name__}: {exc}",
+                    )
+                )
                 continue
 
             source_id = str(row["source_id"])
@@ -156,15 +198,36 @@ def prepare_hdf5(config_path: str | Path) -> dict[str, Any]:
         output.attrs["format_version"] = "1"
 
     temporary.replace(output_path)
-    pd.DataFrame(rejections, columns=["path", "reason"]).to_csv(rejections_path, index=False)
-    with h5py.File(output_path, "r") as dataset:
+    rejection_table = pd.DataFrame(rejections, columns=REJECTION_COLUMNS)
+    rejection_table.to_csv(rejections_path, index=False)
+    with h5py.File(output_path, "r+") as dataset:
         split_counts = {
             SPLIT_NAMES[index]: int(np.sum(dataset["split"][:] == index)) for index in SPLIT_NAMES
         }
-    return {
+        dataset.attrs["input_rows"] = count
+        dataset.attrs["accepted_rows"] = written
+        dataset.attrs["rejected_rows"] = len(rejections)
+
+    reason_counts = {
+        str(reason): int(reason_count)
+        for reason, reason_count in rejection_table["reason"].value_counts().items()
+    }
+    stage_counts = {
+        str(stage): int(stage_count)
+        for stage, stage_count in rejection_table["stage"].value_counts().items()
+    }
+    summary = {
         "output": str(output_path),
+        "rejections_csv": str(rejections_path),
+        "summary_json": str(summary_path),
+        "input": count,
         "accepted": written,
         "rejected": len(rejections),
+        "acceptance_fraction": written / count if count else 0.0,
         "pixels": len(wavelength),
         "splits": split_counts,
+        "rejection_stages": stage_counts,
+        "rejection_reasons": reason_counts,
     }
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    return summary

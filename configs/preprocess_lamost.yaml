@@ -1,7 +1,8 @@
 spectra_root: spectra/dr9-v2.0-lrs-fits
-matched_labels: data/interim/lamost_highres_matched.csv
+matched_labels: data/interim/lamost_apogee_candidates.csv
 output_h5: data/processed/lamost_training.h5
 rejections_csv: data/interim/preprocess_rejections.csv
+summary_json: data/interim/preprocess_summary.json
 
 labels:
   - teff
@@ -50,4 +51,3 @@ split:
   test_fraction: 0.10
   seed: 42
   group_column: source_id
-

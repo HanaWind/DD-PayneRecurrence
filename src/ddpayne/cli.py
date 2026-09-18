@@ -12,6 +12,7 @@ import torch
 
 from ddpayne.config import PROJECT_ROOT, project_path
 from ddpayne.data.build import prepare_hdf5
+from ddpayne.data.catalog import write_candidate_table
 from ddpayne.data.lamost import read_lamost_spectrum
 from ddpayne.data.manifest import build_manifest, iter_spectra
 from ddpayne.data.matching import match_label_catalog
@@ -73,6 +74,23 @@ def parser() -> argparse.ArgumentParser:
     matching.add_argument("--output", required=True)
     matching.add_argument("--max-separation-arcsec", type=float, default=1.0)
 
+    candidates = commands.add_parser(
+        "build-candidates",
+        help="Match a LAMOST catalog to high-resolution labels and write candidate obsids",
+    )
+    candidates.add_argument("--lamost-catalog", required=True)
+    candidates.add_argument("--labels", required=True)
+    candidates.add_argument("--output", required=True)
+    candidates.add_argument("--max-separation-arcsec", type=float, default=1.0)
+    candidates.add_argument("--gaia-version", choices=["auto", "dr2", "dr3"], default="auto")
+    candidates.add_argument(
+        "--quality",
+        choices=["none", "apogee"],
+        default="none",
+        help="Apply an explicit first-pass quality filter to the label catalog",
+    )
+    candidates.add_argument("--limit", type=int)
+
     prepare = commands.add_parser("prepare", help="Build a training HDF5 dataset")
     prepare.add_argument("--config", required=True)
 
@@ -113,6 +131,18 @@ def main(argv: list[str] | None = None) -> None:
             arguments.max_separation_arcsec,
         )
         _print({"output": str(project_path(arguments.output)), "matches": count})
+    elif arguments.command == "build-candidates":
+        _print(
+            write_candidate_table(
+                lamost_catalog=project_path(arguments.lamost_catalog),
+                label_catalog=project_path(arguments.labels),
+                output=project_path(arguments.output),
+                max_separation_arcsec=arguments.max_separation_arcsec,
+                gaia_version=arguments.gaia_version,
+                quality=arguments.quality,
+                limit=arguments.limit,
+            )
+        )
     elif arguments.command == "prepare":
         _print(prepare_hdf5(project_path(arguments.config)))
     elif arguments.command == "train":

@@ -47,6 +47,17 @@ def _label_weights(label_names: list[str], config: dict[str, Any]) -> np.ndarray
     return np.asarray([float(values.get(name, default)) for name in label_names], dtype=np.float32)
 
 
+def _exponential_learning_rate_factor(
+    step: int, learning_rate_start: float, learning_rate_end: float, max_steps: int
+) -> float:
+    if learning_rate_start <= 0 or learning_rate_end <= 0:
+        raise ValueError("Learning rates must be positive")
+    if max_steps <= 0:
+        raise ValueError("max_steps must be positive")
+    decay = math.log(learning_rate_end / learning_rate_start) / max_steps
+    return math.exp(decay * step)
+
+
 def _save_checkpoint(
     path: Path,
     model: PixelwisePayne,
@@ -159,14 +170,17 @@ def train_from_config(config_path: str | Path) -> dict[str, Any]:
     learning_rate_start = float(optimization.get("learning_rate_start", 0.01))
     learning_rate_end = float(optimization.get("learning_rate_end", 0.0001))
     max_steps = int(optimization.get("max_steps", 10_000))
+    _exponential_learning_rate_factor(0, learning_rate_start, learning_rate_end, max_steps)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=learning_rate_start,
         weight_decay=float(optimization.get("weight_decay", 0.0)),
     )
-    decay = math.log(learning_rate_end / learning_rate_start) / max(max_steps - 1, 1)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=lambda step: math.exp(decay * step)
+        optimizer,
+        lr_lambda=lambda step: _exponential_learning_rate_factor(
+            step, learning_rate_start, learning_rate_end, max_steps
+        ),
     )
     mixed_precision = bool(optimization.get("mixed_precision", True)) and device.type == "cuda"
     amp_scaler = torch.amp.GradScaler(device.type, enabled=mixed_precision)
